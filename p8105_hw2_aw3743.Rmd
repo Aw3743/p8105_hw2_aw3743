@@ -163,33 +163,28 @@ This problem uses the Mr. Trash Wheel dataset, to read & clean.
 ```{r}
 mr_trash_df = read_excel("./data/202409 Trash Wheel Collection Data.xlsx", 
                         sheet = "Mr. Trash Wheel",
-                        range = "A2:N586",
+                        range = "A2:N655",
                         col_types = "text")
+
 mr_trash_df = janitor::clean_names(mr_trash_df)
 ```
 
 
+*Clean the Mr. Trash Wheel data*
+
 ```{r}
-# Read Mr. Trash Wheel data with proper handling of comma-separated numbers
-mr_trash_df = read_excel("./data/202409 Trash Wheel Collection Data.xlsx", 
-                        sheet = "Mr. Trash Wheel",
-                        col_types = c("numeric", "text", "numeric", "text", 
-                                     "numeric", "numeric", "text", "text", 
-                                     "text", "text", "text", "text", "text", "text")) |>
-  # Clean column names first
-  janitor::clean_names()
-# Convert comma-separated numbers to numeric
 mr_trash_clean = mr_trash_df |>
-  filter(!is.na(dumpster)) |>  # Remove rows without dumpster data
+  filter(!is.na(dumpster) & !is.na(weight_tons)) |>
   mutate(
+    across(c(dumpster, year, weight_tons, volume_cubic_yards), as.numeric),
     across(c(plastic_bottles, polystyrene, cigarette_butts, glass_bottles, 
              plastic_bags, wrappers, sports_balls), 
-           ~ as.numeric(gsub(",", "", .))),  # Remove commas and convert to numeric
+           ~ as.numeric(gsub(",", "", .))),
     homes_powered = as.numeric(homes_powered),
-    sports_balls = as.integer(round(sports_balls)),  # Round and convert to integer
-    trash_wheel = "Mr. Trash Wheel"  # Add identifier
+    sports_balls = as.integer(round(sports_balls)),
+    trash_wheel = "Mr. Trash Wheel"
   ) |>
-  select(-contains("note"))  # Remove note columns
+  arrange(year, month, dumpster)
 
 mr_trash_clean
 ```
