@@ -173,14 +173,15 @@ mr_trash_df = janitor::clean_names(mr_trash_df)
 *Clean the Mr. Trash Wheel data*
 
 ```{r}
+# Clean the data
 mr_trash_clean = mr_trash_df |>
   filter(!is.na(dumpster) & !is.na(weight_tons)) |>
   mutate(
     across(c(dumpster, year, weight_tons, volume_cubic_yards), as.numeric),
     across(c(plastic_bottles, polystyrene, cigarette_butts, glass_bottles, 
-             plastic_bags, wrappers, sports_balls), 
+             plastic_bags, wrappers, sports_balls, homes_powered),  # Now it should be homes_powered
            ~ as.numeric(gsub(",", "", .))),
-    homes_powered = as.numeric(homes_powered),
+    date = as.Date(as.numeric(date), origin = "1899-12-30"),
     sports_balls = as.integer(round(sports_balls)),
     trash_wheel = "Mr. Trash Wheel"
   ) |>
@@ -189,3 +190,374 @@ mr_trash_clean = mr_trash_df |>
 mr_trash_clean
 ```
 
+*Read the Professor Trash Wheel data*
+```{r}
+# Read Professor Trash Wheel data with manual column names
+prof_trash_df = read_excel("./data/202409 Trash Wheel Collection Data.xlsx", 
+                          sheet = "Professor Trash Wheel", 
+                          range = "A1:M118",
+                          col_names = c("dumpster", "month", "year", "date", "weight_tons",
+                                       "volume_cubic_yards", "plastic_bottles", "polystyrene",
+                                       "cigarette_butts", "glass_bottles", "plastic_bags", 
+                                       "wrappers", "homes_powered"),
+                          col_types = "text")
+
+# Remove header row and clean names
+prof_trash_df = prof_trash_df |>
+  slice(-1) |>
+  janitor::clean_names()
+
+print("Cleaned column names:")
+names(prof_trash_df)
+
+```
+
+*Clean the Professor Trash Wheel data + format*
+
+```{r}
+# Clean the data using the correct column names
+prof_trash_clean = prof_trash_df |>
+  filter(!is.na(dumpster) & !is.na(weight_tons)) |>
+  mutate(
+    across(c(dumpster, year, weight_tons, volume_cubic_yards), as.numeric),
+    across(c(plastic_bottles, polystyrene, cigarette_butts, glass_bottles, 
+             plastic_bags, wrappers, homes_powered),
+           ~ as.numeric(gsub(",", "", .))),
+    date = as.Date(as.numeric(date), origin = "1899-12-30"),
+    trash_wheel = "Professor Trash Wheel"
+  ) |>
+  arrange(year, month, dumpster)
+
+prof_trash_clean
+
+```
+
+*Read the Gwynnda Trash Wheel data*
+
+```{r}
+# Read with correct column names for Gwynnda's actual structure since before x1..... xetc
+gwynnda_trash_df_raw = read_excel("./data/202409 Trash Wheel Collection Data.xlsx", 
+                                 sheet = "Gwynnda Trash Wheel",
+                                 range = "A1:L265",
+                                 col_names = c("dumpster", "month", "year", "date", "weight_tons",
+                                              "volume_cubic_yards", "plastic_bottles", "polystyrene",
+                                              "cigarette_butts", "plastic_bags", "wrappers", 
+                                              "homes_powered"),
+                                 col_types = "text")
+
+print("Column names:")
+print(names(gwynnda_trash_df_raw))
+
+# Now process
+gwynnda_trash_df = gwynnda_trash_df_raw |>
+  slice(-1) |>  # Remove the header row
+  janitor::clean_names()
+
+print("Cleaned column names:")
+print(names(gwynnda_trash_df))
+
+
+```
+
+*Clean the Gwynnda*
+
+```{r}
+# Clean the data
+gwynnda_trash_clean = gwynnda_trash_df |>
+  filter(!is.na(dumpster) & !is.na(weight_tons)) |>
+  mutate(
+    # Convert all numeric columns with better handling
+    across(c(dumpster, year, weight_tons, volume_cubic_yards, 
+             plastic_bottles, polystyrene, cigarette_butts,
+             plastic_bags, wrappers, homes_powered),
+           ~ {
+             # Remove commas and convert to numeric, handling empty strings
+             clean_val = gsub(",", "", .)
+             # Convert empty strings to NA before numeric conversion
+             clean_val[clean_val == ""] <- NA
+             as.numeric(clean_val)
+           }),
+    date = as.Date(as.numeric(date), origin = "1899-12-30"),
+    trash_wheel = "Gwynnda Trash Wheel"
+  ) |>
+  arrange(year, month, dumpster)
+
+gwynnda_trash_clean
+```
+
+*Now we can combine all the 3 data sets*
+
+```{r}
+all_trash_wheels = bind_rows(mr_trash_clean, prof_trash_clean, gwynnda_trash_clean) |>
+  arrange(year, month, dumpster)
+
+all_trash_wheels
+```
+
+*Answering the specific questions for Problem 2*
+```{r}
+# Total weight of trash collected by Professor Trash Wheel
+prof_total_weight = all_trash_wheels |>
+  filter(trash_wheel == "Professor Trash Wheel") |>
+  summarize(total_weight = sum(weight_tons, na.rm = TRUE))
+
+# Total cigarette butts collected by Gwynnda in June 2022
+gwynnda_june_2022 = all_trash_wheels |>
+  filter(trash_wheel == "Gwynnda Trash Wheel",
+         year == 2022,
+         month == "June") |>
+  summarize(total_cigarettes = sum(cigarette_butts, na.rm = TRUE))
+
+prof_total_weight
+gwynnda_june_2022
+```
+
+
+*Dataset Summary*
+
+```{r}
+# Check the actual column names in the combined dataset
+print("Column names in all_trash_wheels:")
+names(all_trash_wheels)
+
+# Check if any column names are empty
+print("Any empty column names?")
+any(names(all_trash_wheels) == "")
+
+# Check the structure of the dataset
+print("Dataset structure:")
+glimpse(all_trash_wheels)
+
+#Now we can do a dataset summary to see what is happening 
+trash_summary = tibble(
+  n_rows = nrow(all_trash_wheels),
+  n_cols = ncol(all_trash_wheels),
+  min_year = min(all_trash_wheels$year, na.rm = TRUE),
+  max_year = max(all_trash_wheels$year, na.rm = TRUE),
+  key_variables = paste(names(all_trash_wheels), collapse = ", ")
+)
+
+# Check Professor Trash Wheel total weight
+prof_total_weight = all_trash_wheels |>
+  filter(trash_wheel == "Professor Trash Wheel") |>
+  summarize(total_weight = sum(weight_tons, na.rm = TRUE))
+
+prof_total_weight
+
+trash_summary
+```
+
+*    The combined Trash Wheel dataset contains 1,031 observations and 15 columns, covering the period from 2014 to 2024. The dataset tracks trash collection from three water-cleaning devices: Mr. Trash Wheel, Professor Trash Wheel, and Gwynnda. Key variables include dumpster number, month, year, weight in tons, volume in cubic yards, and counts of specific trash types like plastic bottles, cigarette butts, and sports balls. Professor Trash Wheel collected a total of 243.4 tons of trash, while Gwynnda collected 18,120 cigarette butts in June 2022. 
+
+
+
+## Problem 3
+
+
+*Read and clean the ZORI Dataset*
+```{r}
+
+# Read ZORI data with manual column name handling
+zori_df = read_csv("./data/Zip_zori_uc_sfrcondomfr_sm_month_NYC.csv", 
+                  col_names = TRUE,
+                  show_col_types = FALSE)
+
+# Manually assign clean names to first 9 columns
+clean_names_first9 <- c("region_id", "size_rank", "region_name", "region_type", 
+                       "state_name", "state", "city", "metro", "county_name")
+names(zori_df)[1:9] <- clean_names_first9
+
+# Pivot longer and convert date columns
+zori_clean = zori_df |>
+  pivot_longer(
+    cols = 10:ncol(zori_df),  # Date columns
+    names_to = "date_str",
+    values_to = "rental_price"
+  ) |>
+  mutate(
+    # date_str is already in "YYYY-MM-DD" format, use it directly
+    date = as.Date(date_str),
+    year = year(date),
+    month = month(date, label = TRUE),
+    month_num = month(date)
+  ) |>
+  filter(!is.na(rental_price)) |>
+  rename(zip_code = region_name) |>
+  arrange(zip_code, date)
+
+zori_clean
+```
+
+
+*Read and clean the ZIP Codes data set*
+
+```{r}
+# Read ZIP code data
+zip_df = read_csv("./data/Zip Codes.csv")
+zip_df = janitor::clean_names(zip_df)
+
+# Clean ZIP code data
+zip_clean = zip_df |>
+  mutate(
+    zip_code = as.character(zip_code),
+    borough = county
+  ) |>
+  select(zip_code, borough, neighborhood) |>
+  filter(!is.na(zip_code)) |>
+  distinct()
+
+zip_clean
+
+```
+
+*Now merge the 2 datasets*
+
+```{r}
+# I kept getting an error for the zip-code file
+# Converting zip_code to character and overwrite the my data set
+zori_clean = zori_clean |>
+  mutate(zip_code = as.character(zip_code))
+
+# Verify the conversion worked
+print("ZORI zip_code type after conversion:")
+class(zori_clean$zip_code)
+
+print("ZORI zip_code sample after conversion:")
+head(zori_clean$zip_code)
+
+# Now merge the datasets
+final_rental_data = zori_clean |>
+  left_join(zip_clean, by = "zip_code")
+
+final_rental_data
+
+# Check the column names in the merged dataset
+print("Column names in final_rental_data:")
+names(final_rental_data)
+
+# Check if any column names are empty
+print("Empty column names:")
+any(names(final_rental_data) == "")
+
+# Check the structure
+print("Dataset structure:")
+glimpse(final_rental_data)
+
+# Create summary using the direct approach
+total_obs = nrow(final_rental_data)
+unique_zips = n_distinct(final_rental_data$zip_code)
+unique_neighborhoods = n_distinct(final_rental_data$neighborhood)
+min_date = min(final_rental_data$date)
+max_date = max(final_rental_data$date)
+
+dataset_summary = tibble(
+  total_observations = total_obs,
+  unique_zip_codes = unique_zips,
+  unique_neighborhoods = unique_neighborhoods,
+  date_range = paste(min_date, "to", max_date)
+)
+
+dataset_summary
+```
+
+
+*Identify Zip Codes missing from ZORI data*
+
+```{r}
+# ZIP codes in ZIP dataset but not in ZORI
+missing_zips = zip_clean |>
+  anti_join(zori_clean, by = "zip_code")
+
+missing_zips_count = nrow(missing_zips)
+
+print(paste("ZIP codes missing from ZORI data:", missing_zips_count))
+
+# Count by borough
+missing_by_borough = missing_zips |>
+  count(borough, name = "missing_count") |>
+  arrange(desc(missing_count))
+
+print("Missing ZIP codes by borough:")
+missing_by_borough
+
+# Show sample of missing ZIP codes
+missing_sample = missing_zips |>
+  head(10)
+
+print("Sample of missing ZIP codes:")
+missing_sample
+
+# Summary of missing ZIP codes by borough
+missing_summary = missing_zips |>
+  group_by(borough) |>
+  summarize(missing_count = n()) |>
+  arrange(desc(missing_count))
+
+missing_summary
+
+# Get the list of boroughs with missing ZIP codes
+missing_boroughs = missing_summary$borough
+```
+
+*COVID-19 rental price comparison*
+
+```{r}
+# Only following approach works on my end
+jan_2020 = final_rental_data |>
+  filter(month_num == 1, year == 2020) |>
+  select(zip_code, borough, neighborhood, rental_price_2020 = rental_price)
+
+jan_2021 = final_rental_data |>
+  filter(month_num == 1, year == 2021) |>
+  select(zip_code, rental_price_2021 = rental_price)
+
+# Join and calculate changes
+covid_comparison = jan_2020 |>
+  inner_join(jan_2021, by = "zip_code") |>
+  mutate(
+    price_change = rental_price_2021 - rental_price_2020,
+    percent_change = (rental_price_2021 - rental_price_2020) / rental_price_2020 * 100
+  )
+
+# Top 10 largest price drops
+top_drops = covid_comparison |>
+  arrange(price_change) |>
+  head(10)
+
+print("Top 10 largest price drops (Jan 2020 to Jan 2021):")
+top_drops
+
+# Get the range of percentage drops
+min_pct_drop = round(min(top_drops$percent_change), 1)
+max_pct_drop = round(max(top_drops$percent_change), 1)
+
+# Got boroughs represented in top drops
+top_drop_boroughs = unique(top_drops$borough)
+
+print(paste("Percentage drop range:", min_pct_drop, "% to", max_pct_drop, "%"))
+print(paste("Boroughs with largest drops:", paste(top_drop_boroughs, collapse = ", ")))
+
+# Show the complete top 10 drops
+top_drops_complete = covid_comparison |>
+  arrange(price_change) |>
+  head(10)
+
+print("Complete top 10 largest price drops:")
+top_drops_complete
+
+# Get the range of percentage drops
+min_pct_drop = round(min(top_drops_complete$percent_change), 1)
+max_pct_drop = round(max(top_drops_complete$percent_change), 1)
+
+# Get boroughs represented in top drops
+top_drop_boroughs = unique(top_drops_complete$borough)
+
+print(paste("Percentage drop range:", min_pct_drop, "% to", max_pct_drop, "%"))
+print(paste("Boroughs with largest drops:", paste(top_drop_boroughs, collapse = ", ")))
+
+```
+
+
+*Answer to Problem 3*
+
+*    The combined rental dataset contains 10,677 observations tracking prices across 149 ZIP codes and 43 NYC neighborhoods from 2015-2024. Analysis reveals 171 ZIP codes are missing from the rental data, primarily from Manhattan (102) and Queens (44), likely representing commercial or low-rental areas. During COVID-19, the largest price drops ranged from 14.4% to 22.4%, all concentrated in Manhattan neighborhoods. Lower Manhattan, Chelsea, and the Lower East Side experienced the most severe declines due to pandemic-related migration from dense urban centers. The dataset captures both the initial pandemic shock and subsequent recovery through 2024.
