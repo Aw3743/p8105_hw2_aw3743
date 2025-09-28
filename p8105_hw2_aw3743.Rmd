@@ -1,21 +1,158 @@
 ---
-title: "Simple document"
-output: html_document
+title: "P8105 Homework 2"
+author: Aisha Waggeh
+date: October 1 2025
+output: github_document
 ---
 
-I'm an R Markdown document! 
-
-# Section 1
-
-Here's a **code chunk** that samples from 
-a _normal distribution_:
-
-```{r}
-samp = rnorm(100)
-length(samp)
+```{r setup}
+library(tidyverse)
 ```
 
-# Section 2
 
-I can take the mean of the sample, too!
-The mean is `r mean(samp)`.
+## Problem 1
+
+This problem uses 3 FiveThrityEight datasets:
+
+- `pols-month.csv` – counts of national politicians (governors, senators, representatives) by party, and whether the sitting president is Republican or Democrat.  
+- `snp.csv` – monthly closing values of the S&P stock market index.  
+- `unemployment.csv` – monthly unemployment rates from the US Bureau of Labor Statistics.  
+
+Our goal is to clean and merge these datasets using **year** and **month** as keys.
+
+*Read the pols data*
+
+```{r}
+pols_df = read_csv("./data/pols-month.csv")
+pols_df = janitor::clean_names(pols_df)
+```
+
+*Clean the pols data + formart*
+
+```{r}
+# Clean the pols data
+pols_clean = pols_df |>
+  separate(mon, into = c("year", "month", "day"), sep = "-") |>
+  mutate(
+    year = as.integer(year),
+    month = as.integer(month),
+    month = month.name[month],
+    day = as.integer(day),
+    president = ifelse(prez_gop == 1, "gop", "dem")
+  ) |>
+select( -prez_dem, -prez_gop, -day) |>
+ arrange(year, month)  
+
+pols_clean
+```
+
+*Read the snp data*
+
+```{r}
+snp_df = read_csv("./data/snp.csv")
+snp_df = janitor::clean_names(snp_df)
+```
+
+*Clean the snp data + formart*
+
+```{r}
+snp_clean = snp_df |>
+  separate(date, into = c("month", "day", "year"), sep = "/") |>
+  mutate(
+    year = as.integer(year),
+    # Convert 2-digit year to 4-digit year:
+    # Years 50-99 -> 1950-1999, Years 00-49 -> 2000- onwards
+    year = ifelse(year >= 50, 1900 + year, 2000 + year),
+    month = as.integer(month),
+    month = month.name[month],
+    day = as.integer(day)
+  ) |>
+  select(-day) |> # Removing day column since we are merging by month only
+  arrange(year, month) |>
+  select(year, month, close)
+
+snp_clean
+```
+
+*Read the unemployment data*
+
+```{r}
+unemployment_df = read_csv("./data/unemployment.csv")
+unemployment_df = janitor::clean_names(unemployment_df)
+```
+
+*Tidy the unemployment data + formart*
+
+```{r}
+unemployment_clean = unemployment_df |>
+  pivot_longer(
+    cols = jan:dec,
+    names_to = "month", 
+    values_to = "unemployment_rate"
+  ) |>
+  mutate(
+    month = str_to_title(month),  # Convert to Title Case
+    month = month.name[match(month, month.abb)],  # Match with full month names
+    year = as.integer(year)
+  ) |>
+  select(year, month, unemployment_rate) |>
+  arrange(year, month)
+
+unemployment_clean
+```
+
+
+*Merge all (pols + snp + unemployment) datasets*
+
+```{r}
+#Need to make sure that we use consistent data type for my merge
+pols_clean_fixed = pols_clean |>
+  mutate(month = as.character(month))
+
+snp_clean_fixed = snp_clean |>
+  mutate(month = as.character(month))
+
+unemployment_clean_fixed = unemployment_clean |>
+  mutate(month = as.character(month))
+```
+
+
+```{r}
+# Now ready for merge, will merge snp into pols first
+merged_data = 
+  left_join(pols_clean, snp_clean, by = c("year", "month"))
+
+ # Then merge unemployment into the result
+final_data =
+  left_join(merged_data, unemployment_clean, by = c("year", "month"))
+
+final_data
+```
+
+
+
+```{r}
+# Need to check the actual start years for each dataset
+print("Pols data start:")
+pols_clean |> summarize(min_year = min(year), max_year = max(year))
+
+print("SNP data start:")
+snp_clean |> summarize(min_year = min(year), max_year = max(year))
+
+print("Unemployment data start:")
+unemployment_clean |> summarize(min_year = min(year), max_year = max(year))
+
+# Checking when SNP data actually begins
+snp_clean |> arrange(year) |> head(10)
+```
+
+*    The pols_clean dataset contains 822 monthly observations of US political party control from 1947 to 2015. It tracks the number of Republican and Democratic politicians across governors, senators, and representatives, along with the sitting president's party. Each row represents the political power distribution for a specific month, revealing the political landscape over nearly seven decades.
+
+*    The snp dataset contains 787 monthly observations of S&P 500 stock market closing values from 1950 to 2015. It tracks the closing price of the S&P 500 index for each month, showing the performance of the US stock market over six decades. The data reveals long-term trends.
+
+*    The unemployment dataset contains 816 monthly observations of US unemployment rates from 1948 to 2015. It tracks the monthly unemployment percentage, providing a measure of economic health and labor market conditions over nearly seven decades. The data shows fluctuations in employment levels across different economic cycles and historical periods.
+
+*    Finally, the merged dataset combines political, financial, and economic indicators by joining the three datasets using year and month as keys. NA values appear for the unemployment rate in 1947 and for S&P closing values from 1947-1949 because these datasets start later than the political data (unemployment in 1948, S&P in 1950). The resulting dataset contains 822 monthly observations from 1947 to 2015, enabling analysis of how political changes correlate with economic trends across decades. This comprehensive resource allows us to examine relationships between government leadership, stock market performance, and labor market conditions over time.
+
+
+
