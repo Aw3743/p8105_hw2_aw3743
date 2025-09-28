@@ -7,6 +7,7 @@ output: github_document
 
 ```{r setup}
 library(tidyverse)
+library(readxl)
 ```
 
 
@@ -155,4 +156,41 @@ snp_clean |> arrange(year) |> head(10)
 *    Finally, the merged dataset combines political, financial, and economic indicators by joining the three datasets using year and month as keys. NA values appear for the unemployment rate in 1947 and for S&P closing values from 1947-1949 because these datasets start later than the political data (unemployment in 1948, S&P in 1950). The resulting dataset contains 822 monthly observations from 1947 to 2015, enabling analysis of how political changes correlate with economic trends across decades. This comprehensive resource allows us to examine relationships between government leadership, stock market performance, and labor market conditions over time.
 
 
+## Problem 2
+
+This problem uses the Mr. Trash Wheel dataset, to read & clean.
+
+```{r}
+mr_trash_df = read_excel("./data/202409 Trash Wheel Collection Data.xlsx", 
+                        sheet = "Mr. Trash Wheel",
+                        range = "A2:N586",
+                        col_types = "text")
+mr_trash_df = janitor::clean_names(mr_trash_df)
+```
+
+
+```{r}
+# Read Mr. Trash Wheel data with proper handling of comma-separated numbers
+mr_trash_df = read_excel("./data/202409 Trash Wheel Collection Data.xlsx", 
+                        sheet = "Mr. Trash Wheel",
+                        col_types = c("numeric", "text", "numeric", "text", 
+                                     "numeric", "numeric", "text", "text", 
+                                     "text", "text", "text", "text", "text", "text")) |>
+  # Clean column names first
+  janitor::clean_names()
+# Convert comma-separated numbers to numeric
+mr_trash_clean = mr_trash_df |>
+  filter(!is.na(dumpster)) |>  # Remove rows without dumpster data
+  mutate(
+    across(c(plastic_bottles, polystyrene, cigarette_butts, glass_bottles, 
+             plastic_bags, wrappers, sports_balls), 
+           ~ as.numeric(gsub(",", "", .))),  # Remove commas and convert to numeric
+    homes_powered = as.numeric(homes_powered),
+    sports_balls = as.integer(round(sports_balls)),  # Round and convert to integer
+    trash_wheel = "Mr. Trash Wheel"  # Add identifier
+  ) |>
+  select(-contains("note"))  # Remove note columns
+
+mr_trash_clean
+```
 
